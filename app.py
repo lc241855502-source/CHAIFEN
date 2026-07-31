@@ -44,8 +44,8 @@ def split_excel(df):
     front_cols_letters = ['AA', 'AB', 'A', 'C', 'L', 'K', 'E', 'AC']
     back_cols_letters = [
         'R', 'S', 'T', 'U', 'V', 'W', 'X',
-        'AI', 'BI', 'BJ', 'AN', 'AP', 'AO', 'AT',
-        'CL', 'BK', 'BL', 'BP', 'BR', 'BQ'
+        'AI', 'AG', 'AH', 'AN', 'AP', 'AO', 'AT',
+        'CL', 'BK', 'BL', 'BM', 'BN', 'BO', 'BP'
     ]
 
     def letters_to_col_names(letter_list):
@@ -97,15 +97,21 @@ def split_excel(df):
             # 包含多个季度：使用通用名称
             dynamic_col_name = "季度对应金额"
 
-        # 逐行计算动态季度列的值
+        # 逐行计算动态季度列的值，金额类保留2位小数
         dynamic_values = []
         for _, row in subset.iterrows():
             q_val = str(row[a_col]).strip().upper()
             target_col = quarter_map.get(q_val)
             if target_col and target_col in all_columns:
-                dynamic_values.append(row[target_col])
+                val = row[target_col]
+                # 尝试转为数值并四舍五入保留2位小数，非数值内容保留原值
+                try:
+                    num_val = float(val)
+                    dynamic_values.append(round(num_val, 2))
+                except (ValueError, TypeError):
+                    dynamic_values.append(val)
             else:
-                dynamic_values.append("")
+                dynamic_values.append(None)
 
         # 按顺序拼接列：前半静态列 + 动态列 + 后半静态列
         result_df = subset[front_col_names].copy()
@@ -127,9 +133,9 @@ uploaded_file = st.file_uploader("上传【设备奖金原表】Excel文件", ty
 if uploaded_file is not None:
     if st.button("开始拆分处理", type="primary", use_container_width=True):
         try:
-            # 读取Excel指定工作表
+            # 读取Excel指定工作表，第二行为表头，自动识别数据类型
             sheet_name = "销售Q1-Q2奖金汇总表"
-            df = pd.read_excel(uploaded_file, sheet_name=sheet_name, header=1, dtype=str)
+            df = pd.read_excel(uploaded_file, sheet_name=sheet_name, header=1)
             
             # 执行拆分
             result_dict = split_excel(df)
@@ -138,7 +144,7 @@ if uploaded_file is not None:
                 st.warning("未生成任何拆分文件，请检查BK列数据")
             else:
                 st.success(f"✅ 处理完成！共拆分出 {len(result_dict)} 个文件")
-                st.caption("所有列表头均与原表对应，单季度文件完全复用原表表头")
+                st.caption("数字列保留数值格式，奖金金额自动保留2位小数")
                 
                 # 生成ZIP压缩包供一键下载
                 zip_buffer = io.BytesIO()
@@ -178,6 +184,6 @@ st.markdown("""
 **处理规则说明**
 1. 以 BK 列为基准拆分，每个唯一值生成一个独立 Excel 文件
 2. 同时将 AW 列中匹配该值的行也并入对应文件
-3. 列顺序严格按照指定：AA/AB/A/C/L/K/E/AC + 动态季度列 + R/S/T/U/V/W/X/AI/BI/BJ/AN/AP/AO/AT/CL/BK/BL/BP/BR/BQ
-4. 动态季度列：A列为Q1取N列、Q2取O列、Q3取P列、Q4取Q列；单季度文件直接复用原表表头
+3. 数字列保留原生数值格式，可直接计算；奖金金额列自动保留2位小数
+4. 列顺序：AA/AB/A/C/L/K/E/AC + 动态季度列 + R/S/T/U/V/W/X/AI/AG/AH/AN/AP/AO/AT/CL/BK/BL/BM/BN/BO/BP
 """)
