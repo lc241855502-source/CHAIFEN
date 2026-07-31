@@ -60,7 +60,7 @@ def split_excel(df):
     front_col_names = letters_to_col_names(front_cols_letters)
     back_col_names = letters_to_col_names(back_cols_letters)
 
-    # 季度对应列映射
+    # 季度对应列映射：季度值 -> 原表列名
     quarter_map = {
         'Q1': all_columns[col_letter_to_index('N')] if col_letter_to_index('N') < total_cols else None,
         'Q2': all_columns[col_letter_to_index('O')] if col_letter_to_index('O') < total_cols else None,
@@ -75,7 +75,6 @@ def split_excel(df):
     if not bk_values:
         raise ValueError("BK列中未找到有效数据")
 
-    dynamic_col_name = "对应季度金额"
     result_dict = {}
 
     for bk_val in bk_values:
@@ -87,7 +86,18 @@ def split_excel(df):
         if subset.empty:
             continue
 
-        # 逐行计算动态季度列
+        # 判断当前子集包含几个季度，决定动态列表头
+        q_unique = subset[a_col].astype(str).str.strip().str.upper().unique()
+        valid_quarters = [q for q in q_unique if q in quarter_map and quarter_map[q] is not None]
+
+        if len(valid_quarters) == 1:
+            # 只有一个季度：直接使用原表对应列的表头，和原表完全一致
+            dynamic_col_name = quarter_map[valid_quarters[0]]
+        else:
+            # 包含多个季度：使用通用名称
+            dynamic_col_name = "季度对应金额"
+
+        # 逐行计算动态季度列的值
         dynamic_values = []
         for _, row in subset.iterrows():
             q_val = str(row[a_col]).strip().upper()
@@ -97,7 +107,7 @@ def split_excel(df):
             else:
                 dynamic_values.append("")
 
-        # 按顺序拼接列
+        # 按顺序拼接列：前半静态列 + 动态列 + 后半静态列
         result_df = subset[front_col_names].copy()
         result_df[dynamic_col_name] = dynamic_values
         result_df = pd.concat([result_df, subset[back_col_names].copy()], axis=1)
@@ -110,14 +120,14 @@ def split_excel(df):
 # ========== Streamlit 页面 ==========
 st.set_page_config(page_title="设备奖金表拆分工具", layout="centered")
 st.title("📊 设备奖金表拆分工具")
-st.caption("按BK列拆分文件 · 自动纳入AW列匹配行 · 严格保留指定列顺序")
+st.caption("按BK列拆分文件 · 自动纳入AW列匹配行 · 表头与原表保持一致")
 
 uploaded_file = st.file_uploader("上传【设备奖金原表】Excel文件", type=["xlsx", "xls"])
 
 if uploaded_file is not None:
     if st.button("开始拆分处理", type="primary", use_container_width=True):
         try:
-            # 读取Excel
+            # 读取Excel指定工作表
             sheet_name = "销售Q1-Q2奖金汇总表"
             df = pd.read_excel(uploaded_file, sheet_name=sheet_name, dtype=str)
             
@@ -128,6 +138,7 @@ if uploaded_file is not None:
                 st.warning("未生成任何拆分文件，请检查BK列数据")
             else:
                 st.success(f"✅ 处理完成！共拆分出 {len(result_dict)} 个文件")
+                st.caption("所有列表头均与原表对应，单季度文件完全复用原表表头")
                 
                 # 生成ZIP压缩包供一键下载
                 zip_buffer = io.BytesIO()
@@ -167,6 +178,6 @@ st.markdown("""
 **处理规则说明**
 1. 以 BK 列为基准拆分，每个唯一值生成一个独立 Excel 文件
 2. 同时将 AW 列中匹配该值的行也并入对应文件
-3. 列顺序严格按照：AA/AB/A/C/L/K/E/AC + 动态季度列 + R/S/T/U/V/W/X/AI/BI/BJ/AN/AP/AO/AT/CL/BK/BL/BP/BR/BQ
-4. 动态季度列：A列为Q1取N列、Q2取O列、Q3取P列、Q4取Q列
+3. 列顺序严格按照指定：AA/AB/A/C/L/K/E/AC + 动态季度列 + R/S/T/U/V/W/X/AI/BI/BJ/AN/AP/AO/AT/CL/BK/BL/BP/BR/BQ
+4. 动态季度列：A列为Q1取N列、Q2取O列、Q3取P列、Q4取Q列；单季度文件直接复用原表表头
 """)
