@@ -129,7 +129,7 @@ if uploaded_file is not None:
         try:
             # 读取Excel指定工作表
             sheet_name = "销售Q1-Q2奖金汇总表"
-            df = pd.read_excel(uploaded_file, sheet_name=sheet_name, dtype=str)
+            df = pd.read_excel(uploaded_file, sheet_name=sheet_name, header=1, dtype=str)
             
             # 执行拆分
             result_dict = split_excel(df)
